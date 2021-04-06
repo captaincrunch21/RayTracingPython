@@ -232,7 +232,7 @@ class PointLight(Light):
         Direction =  -1* self.getShadowRayDirection(Point)
         DistanceFromLight = (Point - self.Position)
         PowerIndex = np.dot(DistanceFromLight,DistanceFromLight)
-        return max(0,np.dot(Direction,Normal))*self.Power*(1000/PowerIndex)
+        return max(0,np.dot(Direction,Normal))*self.Power*(50/PowerIndex)
 
 class AmbientLight(Light):
     def __init__(self,Color,Power):
@@ -323,7 +323,7 @@ class Camera:
                     for shadowObj in scene:
                         shadowcollValue,shadowPoint,shadowDistance,shadownorm = shadowObj.CheckIntersection(ShadowRay)
                         if shadowcollValue:
-                            intensity = intensity
+                            intensity = 0
                     TotalIntensity += intensity
 
                 TotalIntensity= min(TotalIntensity,1)
@@ -332,12 +332,15 @@ class Camera:
                 if intersectedObj.Reflective:
                     #print("Checking Reflection")
                     CheckPoint = collisionPoint - ObjNormal*intersectedObj.Bias
-                    print(math.degrees(math.acos(np.dot(ray.Direction,ObjNormal))))
+                    #print(math.degrees(math.acos(np.dot(ray.Direction,ObjNormal))))
                     ReflectiveRayDirection = ray.Direction - 2*np.dot(ray.Direction,ObjNormal)*ObjNormal
                     ReflectedRay = Ray(CheckPoint,CheckPoint+ReflectiveRayDirection)
                     ReflectiveColor = intersectedObj.Color
                     ReflectiveCollided = False
                     RefDistance = math.inf
+                    RefPoint = []
+                    Refnorm = []
+                    ReflectedObject = None
                     for ReflectiveObj in scene:
                         refcollValue,refPoint,refDistance,refnorm = ReflectiveObj.CheckIntersection(ReflectedRay)
                         ReflectiveCollided = ReflectiveCollided or refcollValue
@@ -345,8 +348,29 @@ class Camera:
                             #print("Reflected")
                             ReflectiveColor = ReflectiveObj.Color
                             Distance = refDistance
+                            Refnorm = refnorm
+                            RefPoint = refPoint
+                            ReflectedObject = ReflectiveObj
 
-                    FinalColor = ReflectiveColor if ReflectiveCollided else FinalColor
+                    TotalIntensity = 0
+                    if ReflectiveCollided:
+                        TotalIntensity = 0
+                        for light in Lights:
+                            intensity = light.getIntensityAtPoint(RefPoint,Refnorm)
+                            shadowDir = light.getShadowRayDirection(RefPoint)
+                            #To handle Shadow acne
+                            CheckPoint = RefPoint - Refnorm*ReflectedObject.Bias
+                            ShadowRay = Ray(CheckPoint ,CheckPoint+shadowDir)
+                            shadowCollision = False
+                            for shadowObj in scene:
+                                shadowcollValue,shadowPoint,shadowDistance,shadownorm = shadowObj.CheckIntersection(ShadowRay)
+                                if shadowcollValue:
+                                    intensity = 0
+                            TotalIntensity += intensity
+
+                    TotalIntensity= min(TotalIntensity,1)
+                    RefColor = [int(ReflectiveObj.Albedo*c*TotalIntensity) for c in ReflectiveColor]
+                    FinalColor = RefColor if ReflectiveCollided else FinalColor
 
             #setting Pixel Color
 
@@ -376,7 +400,7 @@ class Render:
 
 #Dummy Scene Containing only Sphere need to improve
 #Scene = [Sphere([0,0,-40],20,red,0.9)]
-Scene = [Box([-50,0,-100],40,100,70,blue,1.0),Sphere([0,0,-60],20,red,0.9)]
+Scene = [Sphere([0,45,-60],20,blue,0.9),Sphere([0,-45,-60],20,green,0.9),Sphere([45,0,-60],20,green,0.9),Sphere([0,0,-60],20,red,0.9,True)]
 #Scene = [Box([0,0,-100],165,150,5,[100,100,100],1.0),Sphere([0,0,-40],20,red,0.8,True),Box([0,60,-40],150,5,100,[150,150,0],1.0),Box([0,-60,-40],150,5,100,[0,190,220],1.0,True),Box([-60,0,-40],5,100,100,green,1.0)]
 Lights = [PointLight([10,0,-10],white,1.0)]
 #Lights = [DirectionalLight([0.58,0.58,-0.58],white,0.8)]
@@ -384,7 +408,7 @@ Lights = [PointLight([10,0,-10],white,1.0)]
 
 
 #Window dimensions
-width = 250
+width = 1000
 fov = 1.57
 aspectRatio = 1.7
 height = int(aspectRatio*width)
